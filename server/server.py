@@ -1,0 +1,175 @@
+import socket
+from protocol import KeyGenerator, KeySwitch, AesEncryptDecrypt, BUFFER
+import logging
+import asyncio
+from TunAdapter import create_adapter, toolkit
+from typing import Dict, Tuple
+
+
+SERVER_PORT = 50505
+ADDRESS = "10.9.0.1/24"
+NAME = "vpn-tun"
+
+
+aes_keys: Dict[Tuple[str, int], bytes] = {} 
+ip_to_addr_map: Dict[str, Tuple[str, int]] = {}
+KeyGenerator.generate_keys()
+SERVER_PRIVATE_KEY, SERVER_PUBLIC_KEY = KeyGenerator.load_keys()
+
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+
+
+def setup_route_table():
+    # Enable forwarding and set up NAT/iptables rules
+    logging.info("Setting up server routing table...")
+    toolkit.run("/usr/sbin/sysctl -w net.ipv4.ip_forward=1")
+    toolkit.run("iptables -t nat -A POSTROUTING -s 10.9.0.0/24 ! -d 10.9.0.0/24 -m comment --comment 'vpn' -j MASQUERADE")
+    toolkit.run("iptables -A FORWARD -s 10.9.0.0/24 -m state --state RELATED,ESTABLISHED -j ACCEPT")
+    toolkit.run("iptables -A FORWARD -d 10.9.0.0/24 -j ACCEPT")
+    logging.info("Routing table set up.")
+
+def cleanup_route_table():
+    # Remove forwarding and delete NAT/iptables rules
+    logging.info("Restoring server routing table...")
+    try:
+        toolkit.run("iptables -t nat -D POSTROUTING -s 10.9.0.0/24 ! -d 10.9.0.0/24 -m comment --comment 'vpn' -j MASQUERADE")
+        toolkit.run("iptables -D FORWARD -s 10.9.0.0/24 -m state --state RELATED,ESTABLISHED -j ACCEPT")
+        toolkit.run("iptables -D FORWARD -d 10.9.0.0/24 -j ACCEPT")
+        toolkit.run("/usr/sbin/sysctl -w net.ipv4.ip_forward=0")
+    except Exception as e:
+        logging.warning("Error during routing cleanup (rule might not have been present): %s", e)
+    logging.info("Routing table restored.")
+
+
+
+class VPNDatagramProtocol(asyncio.DatagramProtocol):
+    """Handles network I/O for the VPN (UDP socket)."""
+    def __init__(self, adapter):
+        self.adapter = adapter
+        self.transport = None
+        self.msg_codes = {"GETK": self.handle_get_key, "SENK": self.handle_send_key}
+        
+
+    def connection_made(self, transport):
+        self.transport = transport
+        logging.info("UDP Transport listening on port %d", SERVER_PORT)
+
+
+    def datagram_received(self, data: bytes, addr: Tuple[str, int]):
+        if addr not in aes_keys:
+            try:
+                msg_code = data[:4].decode()
+                args = data[4:]
+                
+                if msg_code in self.msg_codes:
+                    self.msg_codes[msg_code](args, addr)
+                else:
+                    logging.warning("Unknown message code %s from %s", msg_code, addr)
+                    
+            except Exception as e:
+                logging.error("Handshake error from %s: %s", addr, e)
+        else:
+            try:
+                aes_key = aes_keys[addr]
+                packet = AesEncryptDecrypt.aes_decrypt(aes_key, data)
+                asyncio.create_task(self.write_to_tun(packet, addr))
+                
+            except Exception as e:
+                logging.error("Decryption/Write error from %s: %s", addr, e)
+
+
+    def handle_get_key(self, args, addr):
+        try:
+            self.transport.sendto(SERVER_PUBLIC_KEY.export_key(), addr)
+            logging.info("Sent server public key to %s", addr)
+        except Exception as e:
+            logging.error("Failed to send public key to %s: %s", addr, e)
+
+
+    def handle_send_key(self, args, addr):
+        try:
+            aes_key = KeySwitch.decrypt_aes_key(args, SERVER_PRIVATE_KEY) # Sync call
+            aes_keys[addr] = aes_key
+            
+            #to change: give client ips...
+            client_ip = "10.9.0.2"
+            
+            ip_to_addr_map[client_ip] = addr
+            
+            logging.info("Client %s established with AES key. Allocated IP: %s", addr, client_ip)
+            
+        except Exception as e:
+            logging.error("Failed to decrypt/establish AES key from %s: %s", addr, e)
+
+    async def write_to_tun(self, packet: bytes, addr: Tuple[str, int]):
+        """Writes a decrypted packet to the TUN adapter."""
+        try:
+            parsed_packet = toolkit.parse_packet(packet)
+            
+            if parsed_packet.src_s not in ip_to_addr_map:
+                ip_to_addr_map[parsed_packet.src_s] = addr
+
+            await self.adapter.write(packet)
+            logging.debug("Wrote packet to TUN: %s -> %s", parsed_packet.src_s, parsed_packet.dst_s)
+            
+        except Exception as e:
+            logging.error("Error writing to adapter: %s", e)
+
+
+
+async def read_from_tun_loop(adapter, transport):
+    while True:
+        try:
+            packet = await adapter.read() 
+            parsed_packet = toolkit.parse_packet(packet)
+            
+            dst_ip = parsed_packet.dst_s
+            
+            if dst_ip in ip_to_addr_map:
+                # Packet is for a connected VPN client
+                addr = ip_to_addr_map[dst_ip]
+                aes_key = aes_keys[addr]
+                
+                encrypted_packet = AesEncryptDecrypt.aes_encrypt(aes_key, packet)
+                
+                transport.sendto(encrypted_packet, addr)
+                
+                logging.debug("TUN: Encrypted and sent packet to client %s for destination %s", addr, dst_ip)
+            else:
+                # Packet is likely for the external internet or an unmapped destination
+                logging.debug("TUN: Packet %s -> %s is for external routing/NAT or unmapped.", parsed_packet.src_s, parsed_packet.dst_s)
+            
+        except Exception as e:
+            logging.error("Error reading from TUN: %s", e)
+            
+
+async def main():
+    KeyGenerator.generate_keys() 
+    adapter = await create_adapter(ADDRESS, NAME)
+    setup_route_table()
+    
+    loop = asyncio.get_running_loop()
+
+    transport, protocol = await loop.create_datagram_endpoint(
+        lambda: VPNDatagramProtocol(adapter),
+        local_addr=('0.0.0.0', SERVER_PORT))
+
+    tun_reader_task = asyncio.create_task(read_from_tun_loop(adapter, transport))
+    
+    try:
+        await asyncio.gather(tun_reader_task) 
+    
+    except asyncio.CancelledError:
+        pass
+        
+    finally:
+        # Clean up resources on exit
+        if transport: transport.close()
+        cleanup_route_table()
+        logging.info("Server shutdown complete.")
+
+if __name__ == "__main__":
+    try:
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        logging.info("Server stopped by user.")
