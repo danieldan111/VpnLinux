@@ -23,7 +23,17 @@ class toolkit:
     @staticmethod
     def run(cmd):
         logging.debug("Running: %s", cmd)
-        return subprocess.check_output(cmd.split()).decode()
+        try:
+            return subprocess.check_output(cmd.split()).decode()
+        except subprocess.CalledProcessError as e:
+            if "File exists" in (e.stderr.decode() if e.stderr else ""):
+                logging.warning(f"(Ignored duplicate route) {cmd}")
+                return
+            raise
+
+    # def run(cmd):
+    #     logging.debug("Running: %s", cmd)
+    #     return subprocess.check_output(cmd.split()).decode()
 
 
     @staticmethod
