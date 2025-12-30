@@ -134,7 +134,7 @@ class VPNDatagramProtocol(asyncio.DatagramProtocol):
 
 
     def handle_packet(self, args, addr):
-        asyncio.create_task(self.write_to_tun(args, addr))
+        asyncio.get_running_loop().create_task(self.write_to_tun(args, addr))
 
 
     async def write_to_tun(self, packet: bytes, addr: Tuple[str, int]):
