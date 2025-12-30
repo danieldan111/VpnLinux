@@ -94,8 +94,8 @@ class ClientVPNDatagramProtocol(asyncio.DatagramProtocol):
         else:
             try:
                 msg = AesEncryptDecrypt.aes_decrypt(CLIENT_AES_KEY, data)
-                msg_code = data[:4].decode()
-                content = data[4::]
+                msg_code = msg[:4].decode()
+                content = msg[4::]
             except Exception as e:
                 logging.error("Decryption/Write error from server: %s", e)
     
