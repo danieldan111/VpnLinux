@@ -17,7 +17,7 @@ addr_to_ip_map = {}
 KeyGenerator.generate_keys()
 SERVER_PRIVATE_KEY, SERVER_PUBLIC_KEY = KeyGenerator.load_keys()
 
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
 
 
 def setup_route_table():
@@ -80,7 +80,6 @@ class VPNDatagramProtocol(asyncio.DatagramProtocol):
                 aes_key = aes_keys[addr]
                 msg = AesEncryptDecrypt.aes_decrypt(aes_key, data)
                 msg_code = msg[:4].decode()
-                print(msg_code + "-------------------------")
                 args = msg[4::]
                 if msg_code in self.msg_codes.keys():
                     self.msg_codes[msg_code](args, addr)
@@ -131,6 +130,7 @@ class VPNDatagramProtocol(asyncio.DatagramProtocol):
         logging.info("Client from %s with private ip of %s disconnected", addr, client_ip)
         client_ip = addr_to_ip_map[addr]
         ip_to_addr_map.pop(client_ip)
+        aes_keys.pop(addr)
         IP_POOL.append(client_ip)
 
 
