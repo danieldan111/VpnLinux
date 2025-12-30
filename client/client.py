@@ -1,8 +1,6 @@
-import socket
 from protocol import KeyGenerator, KeySwitch, AesEncryptDecrypt, BUFFER
 from Crypto.PublicKey import RSA
 from TunAdapter import create_adapter, toolkit
-import re
 import asyncio
 import logging
 import sys
@@ -13,7 +11,8 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 
 
 SERVER_ADDR = ("79.177.161.218", 50505)
-ADDRESS = "10.9.0.2/24" # Client's internal IP
+# ADDRESS = "10.9.0.2/24" # Client's internal IP
+ADDRESS = None
 NAME = "vpn-tun"
 
 
@@ -28,16 +27,18 @@ def setup_route_table(interface_name, server_ip_addr):
     toolkit.run("/usr/sbin/sysctl -w net.ipv4.ip_forward=1")
     
     old_default_route = toolkit.run("ip route show 0/0")
-    ipv4 = r"((25[0-5]|(2[0-4]|1\d|[1-9]|)\d)\.?\b){4}"
-    old_gateway_ip_addr = re.search(ipv4, old_default_route)
+    # Gets the current default route of the system (usually the gateway to the internet)
+    old_gateway_ip_addr = old_default_route[old_default_route.find("via") + 4: old_default_route.find("dev") - 1]
     
     if old_gateway_ip_addr:
         toolkit.run(f"ip route add {server_ip_addr} via {old_gateway_ip_addr.group(0)}")
+        # Adds a static route to the VPN server IP using the original gateway
     else:
         logging.error("Could not find default gateway for server bypass. Connection may fail.")
 
-    toolkit.run(f"ip route add 0/1 dev {interface_name}")
+    toolkit.run(f"ip route add 0/1 dev {interface_name}") 
     toolkit.run(f"ip route add 128/1 dev {interface_name}")
+    #this redirects all traffic through the VPN
 
     toolkit.run("iptables -t nat -A POSTROUTING -o tun0 -j MASQUERADE")
     toolkit.run("iptables -I FORWARD 1 -i tun0 -m state --state RELATED,ESTABLISHED -j ACCEPT")
@@ -66,48 +67,62 @@ class ClientVPNDatagramProtocol(asyncio.DatagramProtocol):
     def __init__(self, loop):
         self.loop = loop
         self.transport = None
-        self.handshake_step = 0 # 0: Initial, 1: Sent GETK, 2: Complete
+        self.encrypted = False
+        self.cmds = {"STIP": self.set_private_ip, "KEYE": self.handle_key, "PRSP": self.handle_packet_response}
+
 
     def connection_made(self, transport):
         self.transport = transport
         logging.info("UDP transport connected. Initiating handshake.")
         
-        self.transport.sendto(b"GETK", SERVER_ADDR)
-        self.handshake_step = 1
+        self.transport.sendto(b"GETP", SERVER_ADDR) #get private ip
+
 
     def datagram_received(self, data: bytes, addr: Tuple[str, int]):
         global CLIENT_AES_KEY, CLIENT_SERVER_PUBLIC_KEY
+        if self.encrypted:
+            msg_code = data[:4]
+            content = data[4::]
 
-        if self.handshake_step == 1:
+        else:
             try:
-                CLIENT_SERVER_PUBLIC_KEY = RSA.import_key(data)
-                
-                aes_key = KeyGenerator.generate_aes()
-                KeySwitch.send_aes_key(self.transport, aes_key, addr, CLIENT_SERVER_PUBLIC_KEY)
-                
-                CLIENT_AES_KEY = aes_key
-                self.handshake_step = 2
-                logging.info("Handshake complete. Starting data transfer loops.")
-
-                self.loop.create_task(tun_reader_loop(CLIENT_ADAPTER, self.transport))
-
-            except Exception as e:
-                logging.error("Handshake error during key exchange: %s", e)
-                
-        elif self.handshake_step == 2 and CLIENT_AES_KEY and CLIENT_ADAPTER:
-            try:
-                packet = AesEncryptDecrypt.aes_decrypt(CLIENT_AES_KEY, data)
-                self.loop.create_task(CLIENT_ADAPTER.write(packet))
-                
-                # Debug logging
-                parsed_packet = toolkit.parse_packet(packet)
-                toolkit.print_packet(parsed_packet, "SERVER->TUN:")
-                
+                msg = AesEncryptDecrypt.aes_decrypt(CLIENT_AES_KEY, data)
+                msg_code = data[:4]
+                content = data[4::]
             except Exception as e:
                 logging.error("Decryption/Write error from server: %s", e)
-        else:
-            logging.warning("Received unexpected data from %s", addr)
+    
+        self.cmds[msg_code](content, addr)
+            
+                
+    def handle_packet_response(self, args, addr):
+        packet = args
+        self.loop.create_task(CLIENT_ADAPTER.write(packet))
+        # Debug logging
+        parsed_packet = toolkit.parse_packet(packet)
+        toolkit.print_packet(parsed_packet, "SERVER->TUN:")
+        
 
+    def set_private_ip(self, args, addr):
+        ADDRESS = args
+        logging.info("Private ip set to %s", ADDRESS)
+
+
+    def handle_key(self, args, addr):
+        try:
+            CLIENT_SERVER_PUBLIC_KEY = RSA.import_key(args)
+            
+            aes_key = KeyGenerator.generate_aes()
+            KeySwitch.send_aes_key(self.transport, aes_key, addr, CLIENT_SERVER_PUBLIC_KEY)
+            
+            CLIENT_AES_KEY = aes_key
+            logging.info("Handshake complete. Starting data transfer loops.")
+            self.encrypted = True
+            self.loop.create_task(tun_reader_loop(CLIENT_ADAPTER, self.transport))
+
+        except Exception as e:
+            logging.error("Handshake error during key exchange: %s", e)
+    
 
 
 async def tun_reader_loop(adapter, transport):

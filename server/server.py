@@ -1,4 +1,3 @@
-import socket
 from protocol import KeyGenerator, KeySwitch, AesEncryptDecrypt, BUFFER
 import logging
 import asyncio
@@ -7,12 +6,14 @@ from typing import Dict, Tuple
 
 
 SERVER_PORT = 50505
-ADDRESS = "10.9.0.1/24"
+MASK = "/24"
+ADDRESS = "10.9.0.1" + MASK
 NAME = "vpn-tun"
-
+IP_POOL = [f"10.9.0.{i}" for i in range(10, 251)]
 
 aes_keys: Dict[Tuple[str, int], bytes] = {} 
 ip_to_addr_map: Dict[str, Tuple[str, int]] = {}
+addr_to_ip_map = {}
 KeyGenerator.generate_keys()
 SERVER_PRIVATE_KEY, SERVER_PUBLIC_KEY = KeyGenerator.load_keys()
 
@@ -23,9 +24,15 @@ def setup_route_table():
     # Enable forwarding and set up NAT/iptables rules
     logging.info("Setting up server routing table...")
     toolkit.run("/usr/sbin/sysctl -w net.ipv4.ip_forward=1")
-    toolkit.run("iptables -t nat -A POSTROUTING -s 10.9.0.0/24 ! -d 10.9.0.0/24 -m comment --comment 'vpn' -j MASQUERADE")
-    toolkit.run("iptables -A FORWARD -s 10.9.0.0/24 -m state --state RELATED,ESTABLISHED -j ACCEPT")
-    toolkit.run("iptables -A FORWARD -d 10.9.0.0/24 -j ACCEPT")
+
+    toolkit.run("iptables -t nat -A POSTROUTING -s 10.9.0.0/24 ! -d 10.9.0.0/24 -m comment --comment 'vpn' -j MASQUERADE")  
+    # sets up NAT masquerading for VPN clients so their traffic appears from the server's IP
+
+    toolkit.run("iptables -A FORWARD -s 10.9.0.0/24 -m state --state RELATED,ESTABLISHED -j ACCEPT")  
+    # allows forwarding of return traffic from external connections back to VPN clients
+
+    toolkit.run("iptables -A FORWARD -d 10.9.0.0/24 -j ACCEPT")  
+    # allows forwarding of incoming traffic to VPN clients
     logging.info("Routing table set up.")
 
 def cleanup_route_table():
@@ -47,7 +54,7 @@ class VPNDatagramProtocol(asyncio.DatagramProtocol):
     def __init__(self, adapter):
         self.adapter = adapter
         self.transport = None
-        self.msg_codes = {"GETK": self.handle_get_key, "SENK": self.handle_send_key}
+        self.msg_codes = {"GETK": self.handle_get_key, "SENK": self.handle_send_key, "GETP": self.handle_get_ip, "PCKT": self.write_to_tun, "DISC": self.handle_disconnection}
         
 
     def connection_made(self, transport):
@@ -86,20 +93,36 @@ class VPNDatagramProtocol(asyncio.DatagramProtocol):
             logging.error("Failed to send public key to %s: %s", addr, e)
 
 
+    def handle_get_ip(self, args, addr):
+        client_ip = IP_POOL.pop(0)
+        ip_to_addr_map[client_ip] = addr
+        addr_to_ip_map[addr] = client_ip
+        try:
+            self.transport.sendto(f"STIP{client_ip}{MASK}".encode())
+            logging.info("Sent private ip to %s", addr)
+        except Exception as e:
+            logging.error("Failed to send private ip to %s: %s", addr, e)
+
+
     def handle_send_key(self, args, addr):
         try:
             aes_key = KeySwitch.decrypt_aes_key(args, SERVER_PRIVATE_KEY) # Sync call
             aes_keys[addr] = aes_key
             
-            #to change: give client ips...
-            client_ip = "10.9.0.2"
-            
-            ip_to_addr_map[client_ip] = addr
+            client_ip = addr_to_ip_map[addr]
             
             logging.info("Client %s established with AES key. Allocated IP: %s", addr, client_ip)
             
         except Exception as e:
             logging.error("Failed to decrypt/establish AES key from %s: %s", addr, e)
+
+    
+    def handle_disconnection(self, addr):
+        logging.info("Client from %s with private ip of %s disconnected", addr, client_ip)
+        client_ip = addr_to_ip_map[addr]
+        ip_to_addr_map.pop(client_ip)
+        IP_POOL.append(client_ip)
+
 
     async def write_to_tun(self, packet: bytes, addr: Tuple[str, int]):
         """Writes a decrypted packet to the TUN adapter."""
@@ -144,7 +167,6 @@ async def read_from_tun_loop(adapter, transport):
             
 
 async def main():
-    KeyGenerator.generate_keys() 
     adapter = await create_adapter(ADDRESS, NAME)
     setup_route_table()
     

@@ -14,6 +14,7 @@ from typing import Union, Callable
 logging.basicConfig(level=logging.DEBUG)
 MTU = 1420
 #IOCTL Constants:
+#dir\size\type\number
 TUNSETIFF = 0x400454ca
 IFF_TUN = 0x0001
 IFF_NO_PI = 0x1000  # No packet information
