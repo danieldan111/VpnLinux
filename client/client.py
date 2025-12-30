@@ -74,8 +74,11 @@ class ClientVPNDatagramProtocol(asyncio.DatagramProtocol):
     def connection_made(self, transport):
         self.transport = transport
         logging.info("UDP transport connected. Initiating handshake.")
+    
+
+    def request_ip(self):
         if not ADDRESS:
-            self.transport.sendto(b"GETP", SERVER_ADDR) #get private ip
+            self.transport.sendto(b"GETP", SERVER_ADDR) #get private ipa
 
 
     def datagram_received(self, data: bytes, addr: Tuple[str, int]):
