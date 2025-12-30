@@ -99,7 +99,7 @@ class VPNDatagramProtocol(asyncio.DatagramProtocol):
         addr_to_ip_map[addr] = client_ip
         try:
             self.transport.sendto(f"STIP{client_ip}{MASK}".encode(), addr)
-            logging.info("Sent private ip to %s", addr)
+            logging.info("Sent private ip %s to %s", client_ip,addr)
         except Exception as e:
             logging.error("Failed to send private ip to %s: %s", addr, e)
 
