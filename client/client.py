@@ -67,6 +67,7 @@ class ClientVPNDatagramProtocol(asyncio.DatagramProtocol):
     def __init__(self, loop):
         self.loop = loop
         self.transport = None
+        self.sent_getp = False
         self.encrypted = False
         self.cmds = {"STIP": self.set_private_ip, "KEYE": self.handle_key, "PRSP": self.handle_packet_response}
 
@@ -78,7 +79,8 @@ class ClientVPNDatagramProtocol(asyncio.DatagramProtocol):
 
 
     def request_ip(self):
-        if not ADDRESS:
+        if not ADDRESS and not self.sent_getp:
+            self.sent_getp = True
             self.transport.sendto(b"GETP", SERVER_ADDR) #get private ip
 
 
