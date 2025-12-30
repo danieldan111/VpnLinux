@@ -106,6 +106,8 @@ class ClientVPNDatagramProtocol(asyncio.DatagramProtocol):
     def set_private_ip(self, args, addr):
         ADDRESS = args
         logging.info("Private ip set to %s", ADDRESS)
+        setup_route_table(NAME, CLIENT_SERVER_IP_ADDR)
+
 
 
     def handle_key(self, args, addr):
@@ -127,7 +129,7 @@ class ClientVPNDatagramProtocol(asyncio.DatagramProtocol):
 
 async def tun_reader_loop(adapter, transport):
     """Reads packets from the TUN adapter and sends them encrypted to the server."""
-    while True:
+    while True and ADDRESS:
         if not CLIENT_AES_KEY:
             await asyncio.sleep(0.1)
             continue
@@ -147,7 +149,6 @@ async def tun_reader_loop(adapter, transport):
 async def main():
     global CLIENT_ADAPTER
     CLIENT_ADAPTER = await create_adapter(ADDRESS, NAME)
-    setup_route_table(NAME, CLIENT_SERVER_IP_ADDR)
     loop = asyncio.get_running_loop()
     transport, protocol = await loop.create_datagram_endpoint(
         lambda: ClientVPNDatagramProtocol(loop),
