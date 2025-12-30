@@ -122,7 +122,10 @@ class ClientVPNDatagramProtocol(asyncio.DatagramProtocol):
 
 
 
-    def handle_key(self, args, addr):
+    async def handle_key(self, args, addr):
+        if self.encrypted:
+            return
+        
         try:
             CLIENT_SERVER_PUBLIC_KEY = RSA.import_key(args)
             
