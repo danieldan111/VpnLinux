@@ -31,7 +31,7 @@ def setup_route_table(interface_name, server_ip_addr):
     old_gateway_ip_addr = old_default_route[old_default_route.find("via") + 4: old_default_route.find("dev") - 1]
     
     if old_gateway_ip_addr:
-        toolkit.run(f"ip route add {server_ip_addr} via {old_gateway_ip_addr.group(0)}")
+        toolkit.run(f"ip route add {server_ip_addr} via {old_gateway_ip_addr}")
         # Adds a static route to the VPN server IP using the original gateway
     else:
         logging.error("Could not find default gateway for server bypass. Connection may fail.")
