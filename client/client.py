@@ -118,6 +118,8 @@ class ClientVPNDatagramProtocol(asyncio.DatagramProtocol):
 
     async def set_private_ip(self, args, addr):
         global CLIENT_ADAPTER, ADDRESS
+        if ADDRESS:
+            return
         ADDRESS = args.decode()
         logging.info("Private ip set to %s", ADDRESS)
         CLIENT_ADAPTER = await create_adapter(ADDRESS, NAME)
