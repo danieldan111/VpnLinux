@@ -87,7 +87,7 @@ class VPNDatagramProtocol(asyncio.DatagramProtocol):
 
     def handle_get_key(self, args, addr):
         try:
-            self.transport.sendto(SERVER_PUBLIC_KEY.export_key(), addr)
+            self.transport.sendto(b"KEYE" + SERVER_PUBLIC_KEY.export_key(), addr)
             logging.info("Sent server public key to %s", addr)
         except Exception as e:
             logging.error("Failed to send public key to %s: %s", addr, e)

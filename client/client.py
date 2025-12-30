@@ -124,6 +124,7 @@ class ClientVPNDatagramProtocol(asyncio.DatagramProtocol):
         logging.info("Private ip set to %s", ADDRESS)
         CLIENT_ADAPTER = await create_adapter(ADDRESS, NAME)
         setup_route_table(NAME, CLIENT_SERVER_IP_ADDR)
+        self.transport.sendto("GETK", SERVER_ADDR)
 
 
 
@@ -135,7 +136,7 @@ class ClientVPNDatagramProtocol(asyncio.DatagramProtocol):
             CLIENT_SERVER_PUBLIC_KEY = RSA.import_key(args)
             
             aes_key = KeyGenerator.generate_aes()
-            KeySwitch.send_aes_key(self.transport, aes_key, addr, CLIENT_SERVER_PUBLIC_KEY)
+            KeySwitch.send_aes_key(self.transport, b"SENK" + aes_key, addr, CLIENT_SERVER_PUBLIC_KEY)
             
             CLIENT_AES_KEY = aes_key
             logging.info("Handshake complete. Starting data transfer loops.")
