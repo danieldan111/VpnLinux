@@ -92,8 +92,14 @@ class ClientVPNDatagramProtocol(asyncio.DatagramProtocol):
             except Exception as e:
                 logging.error("Decryption/Write error from server: %s", e)
     
-        self.cmds[msg_code](content, addr)
-            
+        asyncio.get_running_loop().call_soon(asyncio.create_task, self.handle_message(msg_code, content, addr))
+
+        
+    async def handle_message(self, msg_code, content, addr):
+        handler = self.cmds.get(msg_code)
+        if handler:
+            await handler(content, addr)
+                    
                 
     def handle_packet_response(self, args, addr):
         packet = args
@@ -103,11 +109,11 @@ class ClientVPNDatagramProtocol(asyncio.DatagramProtocol):
         toolkit.print_packet(parsed_packet, "SERVER->TUN:")
         
 
-    def set_private_ip(self, args, addr):
+    async def set_private_ip(self, args, addr):
         ADDRESS = args
         logging.info("Private ip set to %s", ADDRESS)
         global CLIENT_ADAPTER
-        CLIENT_ADAPTER = asyncio.run(create_adapter(ADDRESS, NAME))
+        CLIENT_ADAPTER = await create_adapter(ADDRESS, NAME)
         setup_route_table(NAME, CLIENT_SERVER_IP_ADDR)
 
 
