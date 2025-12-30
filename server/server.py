@@ -68,7 +68,7 @@ class VPNDatagramProtocol(asyncio.DatagramProtocol):
                 msg_code = data[:4].decode()
                 args = data[4:]
                 
-                if msg_code in self.msg_codes:
+                if msg_code in self.msg_codes.keys():
                     self.msg_codes[msg_code](args, addr)
                 else:
                     logging.warning("Unknown message code %s from %s", msg_code, addr)
@@ -81,7 +81,7 @@ class VPNDatagramProtocol(asyncio.DatagramProtocol):
                 msg = AesEncryptDecrypt.aes_decrypt(aes_key, data)
                 msg_code = msg[:4]
                 args = msg[4::]
-                if msg_code in self.msg_codes:
+                if msg_code in self.msg_codes.keys():
                     self.msg_codes[msg_code](args, addr)
                 else:
                     logging.warning("Unknown message code %s from %s", msg_code, addr)
