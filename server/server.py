@@ -94,6 +94,9 @@ class VPNDatagramProtocol(asyncio.DatagramProtocol):
 
 
     def handle_get_ip(self, args, addr):
+        if addr in addr_to_ip_map.keys():
+            return
+        
         client_ip = IP_POOL.pop(0)
         ip_to_addr_map[client_ip] = addr
         addr_to_ip_map[addr] = client_ip
