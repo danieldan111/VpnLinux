@@ -134,14 +134,7 @@ class VPNDatagramProtocol(asyncio.DatagramProtocol):
 
 
     def handle_packet(self, args, addr):
-        coro = self.write_to_tun(args, addr)  # build coroutine object, DON'T forget it
-        
-        try:
-            loop = asyncio.get_running_loop()
-            loop.create_task(coro)            # schedule it properly
-        except RuntimeError:
-            # Loop not running yet (startup case)
-            asyncio.run(coro)
+        asyncio.create_task(self.write_to_tun(args, addr))
 
 
     async def write_to_tun(self, packet: bytes, addr: Tuple[str, int]):
