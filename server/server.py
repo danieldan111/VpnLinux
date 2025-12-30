@@ -78,9 +78,15 @@ class VPNDatagramProtocol(asyncio.DatagramProtocol):
         else:
             try:
                 aes_key = aes_keys[addr]
-                packet = AesEncryptDecrypt.aes_decrypt(aes_key, data)
-                asyncio.create_task(self.write_to_tun(packet, addr))
-                
+                msg = AesEncryptDecrypt.aes_decrypt(aes_key, data)
+                msg_code = msg[:4]
+                args = msg[4::]
+                if msg_code in self.msg_codes:
+                    self.msg_codes[msg_code](args, addr)
+                else:
+                    logging.warning("Unknown message code %s from %s", msg_code, addr)
+
+
             except Exception as e:
                 logging.error("Decryption/Write error from %s: %s", addr, e)
 
@@ -120,11 +126,15 @@ class VPNDatagramProtocol(asyncio.DatagramProtocol):
             logging.error("Failed to decrypt/establish AES key from %s: %s", addr, e)
 
     
-    def handle_disconnection(self, addr):
+    def handle_disconnection(self, args,addr):
         logging.info("Client from %s with private ip of %s disconnected", addr, client_ip)
         client_ip = addr_to_ip_map[addr]
         ip_to_addr_map.pop(client_ip)
         IP_POOL.append(client_ip)
+
+
+    def handle_packet(self, args, addr):
+        asyncio.create_task(self.write_to_tun(args, addr))
 
 
     async def write_to_tun(self, packet: bytes, addr: Tuple[str, int]):
