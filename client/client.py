@@ -124,7 +124,7 @@ class ClientVPNDatagramProtocol(asyncio.DatagramProtocol):
         logging.info("Private ip set to %s", ADDRESS)
         CLIENT_ADAPTER = await create_adapter(ADDRESS, NAME)
         setup_route_table(NAME, CLIENT_SERVER_IP_ADDR)
-        self.transport.sendto("GETK", SERVER_ADDR)
+        self.transport.sendto(b"GETK", SERVER_ADDR)
 
 
 
