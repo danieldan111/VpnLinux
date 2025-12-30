@@ -100,6 +100,7 @@ class ClientVPNDatagramProtocol(asyncio.DatagramProtocol):
                 content = msg[4::]
             except Exception as e:
                 logging.error("Decryption/Write error from server: %s", e)
+                return
     
         asyncio.get_running_loop().create_task(self.handle_message(msg_code, content, addr))
 
