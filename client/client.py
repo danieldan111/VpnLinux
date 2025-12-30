@@ -121,7 +121,6 @@ class ClientVPNDatagramProtocol(asyncio.DatagramProtocol):
         ADDRESS = args.decode()
         logging.info("Private ip set to %s", ADDRESS)
         CLIENT_ADAPTER = await create_adapter(ADDRESS, NAME)
-        setup_route_table(NAME, CLIENT_SERVER_IP_ADDR)
 
 
 
@@ -166,6 +165,7 @@ async def tun_reader_loop(adapter, transport):
 
 async def main():
     loop = asyncio.get_running_loop()
+    setup_route_table(NAME, CLIENT_SERVER_IP_ADDR)
     transport, protocol = await loop.create_datagram_endpoint(
         lambda: ClientVPNDatagramProtocol(loop),
         remote_addr=SERVER_ADDR) 
