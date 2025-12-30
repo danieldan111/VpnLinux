@@ -109,7 +109,7 @@ class VPNDatagramProtocol(asyncio.DatagramProtocol):
 
     def handle_send_key(self, args, addr):
         try:
-            aes_key = KeySwitch.decrypt_aes_key(args, SERVER_PRIVATE_KEY) # Sync call
+            aes_key = KeySwitch.decrypt_aes_key(args, SERVER_PRIVATE_KEY)[4::] # Sync call
             aes_keys[addr] = aes_key
             
             client_ip = addr_to_ip_map[addr]
