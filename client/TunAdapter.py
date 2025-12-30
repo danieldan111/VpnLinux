@@ -23,17 +23,7 @@ class toolkit:
     @staticmethod
     def run(cmd):
         logging.debug("Running: %s", cmd)
-        try:
-            return subprocess.check_output(cmd.split()).decode()
-        except subprocess.CalledProcessError as e:
-            if "File exists" in (e.stderr.decode() if e.stderr else ""):
-                logging.warning(f"(Ignored duplicate route) {cmd}")
-                return
-            raise
-
-    # def run(cmd):
-    #     logging.debug("Running: %s", cmd)
-    #     return subprocess.check_output(cmd.split()).decode()
+        return subprocess.check_output(cmd.split()).decode()
 
 
     @staticmethod
@@ -90,9 +80,6 @@ class VirtualAdapter:
             #up interface
             toolkit.run(f"/sbin/ip link set dev {self.name} up")
             
-            #this redirects all traffic through the VPN
-            toolkit.run(f"ip route add 0/1 dev {self.name}") 
-            toolkit.run(f"ip route add 128/1 dev {self.name}")
             
         except PermissionError:
             logging.error("Permission denied. Ensure the script is running with root access (sudo).")

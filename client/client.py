@@ -36,7 +36,9 @@ def setup_route_table(interface_name, server_ip_addr):
     else:
         logging.error("Could not find default gateway for server bypass. Connection may fail.")
 
-    
+    toolkit.run(f"ip route add 0/1 dev {interface_name}") 
+    toolkit.run(f"ip route add 128/1 dev {interface_name}")
+    #this redirects all traffic through the VPN
 
     toolkit.run("iptables -t nat -A POSTROUTING -o tun0 -j MASQUERADE")
     toolkit.run("iptables -I FORWARD 1 -i tun0 -m state --state RELATED,ESTABLISHED -j ACCEPT")
@@ -119,6 +121,7 @@ class ClientVPNDatagramProtocol(asyncio.DatagramProtocol):
         ADDRESS = args.decode()
         logging.info("Private ip set to %s", ADDRESS)
         CLIENT_ADAPTER = await create_adapter(ADDRESS, NAME)
+        setup_route_table(NAME, CLIENT_SERVER_IP_ADDR)
 
 
 
@@ -163,7 +166,6 @@ async def tun_reader_loop(adapter, transport):
 
 async def main():
     loop = asyncio.get_running_loop()
-    setup_route_table(NAME, CLIENT_SERVER_IP_ADDR)
     transport, protocol = await loop.create_datagram_endpoint(
         lambda: ClientVPNDatagramProtocol(loop),
         remote_addr=SERVER_ADDR) 
