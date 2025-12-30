@@ -153,7 +153,7 @@ async def read_from_tun_loop(adapter, transport):
                 addr = ip_to_addr_map[dst_ip]
                 aes_key = aes_keys[addr]
                 
-                encrypted_packet = AesEncryptDecrypt.aes_encrypt(aes_key, packet)
+                encrypted_packet = AesEncryptDecrypt.aes_encrypt(aes_key, b"PRSP" + packet)
                 
                 transport.sendto(encrypted_packet, addr)
                 
