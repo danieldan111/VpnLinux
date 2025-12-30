@@ -90,6 +90,9 @@ class VirtualAdapter:
             #up interface
             toolkit.run(f"/sbin/ip link set dev {self.name} up")
             
+            #this redirects all traffic through the VPN
+            toolkit.run(f"ip route add 0/1 dev {self.name}") 
+            toolkit.run(f"ip route add 128/1 dev {self.name}")
             
         except PermissionError:
             logging.error("Permission denied. Ensure the script is running with root access (sudo).")

@@ -36,9 +36,7 @@ def setup_route_table(interface_name, server_ip_addr):
     else:
         logging.error("Could not find default gateway for server bypass. Connection may fail.")
 
-    toolkit.run(f"ip route add 0/1 dev {interface_name}") 
-    toolkit.run(f"ip route add 128/1 dev {interface_name}")
-    #this redirects all traffic through the VPN
+    
 
     toolkit.run("iptables -t nat -A POSTROUTING -o tun0 -j MASQUERADE")
     toolkit.run("iptables -I FORWARD 1 -i tun0 -m state --state RELATED,ESTABLISHED -j ACCEPT")
