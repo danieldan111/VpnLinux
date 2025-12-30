@@ -81,6 +81,7 @@ class ClientVPNDatagramProtocol(asyncio.DatagramProtocol):
     def request_ip(self):
         if not ADDRESS and not self.sent_getp:
             self.sent_getp = True
+            logging.info("IP requested")
             self.transport.sendto(b"GETP", SERVER_ADDR) #get private ip
 
 
