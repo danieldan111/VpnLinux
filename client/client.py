@@ -140,7 +140,7 @@ class ClientVPNDatagramProtocol(asyncio.DatagramProtocol):
             
             aes_key = KeyGenerator.generate_aes()
             KeySwitch.send_aes_key(self.transport, b"SENK" + aes_key, addr, CLIENT_SERVER_PUBLIC_KEY)
-            
+            global CLIENT_AES_KEY
             CLIENT_AES_KEY = aes_key
             logging.info("Handshake complete. Starting data transfer loops.")
             self.encrypted = True
