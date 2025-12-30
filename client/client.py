@@ -81,13 +81,13 @@ class ClientVPNDatagramProtocol(asyncio.DatagramProtocol):
     def datagram_received(self, data: bytes, addr: Tuple[str, int]):
         global CLIENT_AES_KEY, CLIENT_SERVER_PUBLIC_KEY
         if not self.encrypted:
-            msg_code = data[:4]
+            msg_code = data[:4].decode()
             content = data[4::]
 
         else:
             try:
                 msg = AesEncryptDecrypt.aes_decrypt(CLIENT_AES_KEY, data)
-                msg_code = data[:4]
+                msg_code = data[:4].decode()
                 content = data[4::]
             except Exception as e:
                 logging.error("Decryption/Write error from server: %s", e)
