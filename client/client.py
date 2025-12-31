@@ -7,8 +7,8 @@ import sys
 from typing import Tuple, Dict
 
 
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
-
+logging.basicConfig(level=logging.CRITICAL, format='%(asctime)s - %(levelname)s - %(message)s')
+logging.disable(logging.CRITICAL) 
 
 SERVER_ADDR = ("79.177.161.218", 50505)
 # ADDRESS = "10.9.0.2/24" # Client's internal IP
