@@ -18,7 +18,7 @@ KeyGenerator.generate_keys()
 SERVER_PRIVATE_KEY, SERVER_PUBLIC_KEY = KeyGenerator.load_keys()
 
 logging.basicConfig(level=logging.CRITICAL, format='%(asctime)s - %(levelname)s - %(message)s')
-
+logging.disable(logging.CRITICAL) 
 
 def setup_route_table():
     # Enable forwarding and set up NAT/iptables rules
