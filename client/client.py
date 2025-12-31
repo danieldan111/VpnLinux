@@ -116,7 +116,7 @@ class ClientVPNDatagramProtocol(asyncio.DatagramProtocol):
         self.loop.create_task(CLIENT_ADAPTER.write(packet))
         # Debug logging
         parsed_packet = toolkit.parse_packet(packet)
-        toolkit.print_packet(parsed_packet, "SERVER->TUN:")
+        # toolkit.print_packet(parsed_packet, "SERVER->TUN:")
         
 
     async def set_private_ip(self, args, addr):
@@ -164,7 +164,7 @@ async def tun_reader_loop(adapter, transport):
             transport.sendto(encrypted_packet, SERVER_ADDR)
             
             parsed_packet = toolkit.parse_packet(packet)
-            toolkit.print_packet(parsed_packet, "TUN->SERVER:")
+            # toolkit.print_packet(parsed_packet, "TUN->SERVER:")
             
         except Exception as e:
             logging.error("Error reading from TUN: %s", e)
