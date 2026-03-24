@@ -9,6 +9,7 @@ from mainServerProtocol import SecureSocket
 
 
 SERVER_PORT = 50505
+SERVER_IP = "79.177.161.218"
 MASK = "/24"
 ADDRESS = "10.9.0.1" + MASK
 NAME = "vpn-tun"
@@ -218,18 +219,22 @@ def connect_to_server(addr):
         secure = SecureSocket(sock)
         secure.client_handshake()
         
-        # --- ADDED: The port is now sent to the main server ---
-        payload = {"cmd": "SLGN", "server_name": SERVER_NAME, "port": SERVER_PORT}
+        # --- ADDED: Include the manual 'host' IP in the payload ---
+        payload = {
+            "cmd": "SLGN", 
+            "server_name": SERVER_NAME, 
+            "port": SERVER_PORT,
+            "host": SERVER_IP  # <--- Sending the IP manually
+        }
         
         secure.send_json(payload)
         cmd = secure.recv_json().get("cmd")
         print(cmd)
         if cmd == "CNFM":
-            print("[VPN-SERVER] sucssesfully conected to main server")
+            print("[VPN-SERVER] successfully connected to main server")
             return secure
     except Exception as e:
         print(f"[VPN-SERVER] Connection failed: {e}")
-
 
 if __name__ == "__main__":
     print("[VPN-SERVER] connecting to main server")
