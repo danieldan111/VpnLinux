@@ -23,9 +23,20 @@ class toolkit:
     @staticmethod
     def run(cmd):
         logging.debug("Running: %s", cmd)
-        return subprocess.check_output(cmd.split()).decode()
-
-
+        try:
+            # capture_output=True prevents ugly console spam, text=True returns a string
+            result = subprocess.run(cmd.split(), check=True, capture_output=True, text=True)
+            return result.stdout
+            
+        except subprocess.CalledProcessError as e:
+            # Exit code 2 usually means the route already exists. We can safely ignore it.
+            if e.returncode == 2:
+                logging.warning("Ignored Exit Code 2 for '%s'. (Likely a ghost route from a previous crash)", cmd)
+                return ""
+            else:
+                logging.warning("Command '%s' failed (Exit %s). Continuing anyway...", cmd, e.returncode)
+                return ""
+            
     @staticmethod
     def packet_version(packet: bytes) -> int:
         return packet[0] >> 4

@@ -3,6 +3,9 @@ import logging
 import asyncio
 from TunAdapter import create_adapter, toolkit
 from typing import Dict, Tuple
+import socket
+from mainServerProtocol import SecureSocket
+
 
 
 SERVER_PORT = 50505
@@ -10,6 +13,7 @@ MASK = "/24"
 ADDRESS = "10.9.0.1" + MASK
 NAME = "vpn-tun"
 IP_POOL = [f"10.9.0.{i}" for i in range(10, 251)]
+SERVER_NAME = "node_01"
 
 aes_keys: Dict[Tuple[str, int], bytes] = {} 
 ip_to_addr_map: Dict[str, Tuple[str, int]] = {}
@@ -17,8 +21,7 @@ addr_to_ip_map = {}
 KeyGenerator.generate_keys()
 SERVER_PRIVATE_KEY, SERVER_PUBLIC_KEY = KeyGenerator.load_keys()
 
-logging.basicConfig(level=logging.CRITICAL, format='%(asctime)s - %(levelname)s - %(message)s')
-logging.disable(logging.CRITICAL) 
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 def setup_route_table():
     # Enable forwarding and set up NAT/iptables rules
@@ -205,8 +208,33 @@ async def main():
         cleanup_route_table()
         logging.info("Server shutdown complete.")
 
-if __name__ == "__main__":
+
+def connect_to_server(addr):
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     try:
-        asyncio.run(main())
-    except KeyboardInterrupt:
-        logging.info("Server stopped by user.")
+        sock.connect(addr)
+        secure = SecureSocket(sock)
+        secure.client_handshake()
+        
+        payload = {"cmd": "SLGN", "server_name": SERVER_NAME}
+        secure.send_json(payload)
+        cmd = secure.recv_json().get("cmd")
+        print(cmd)
+        if cmd == "CNFM":
+            print("[VPN-SERVER] sucssesfully conected to main server")
+            return secure
+    except Exception as e:
+        print(f"[VPN-SERVER] Connection failed: {e}")
+
+
+if __name__ == "__main__":
+    print("[VPN-SERVER] connecting to main server")
+    secure = connect_to_server(("192.168.7.5", 8000))
+    if secure:
+            try:
+                asyncio.run(main())
+            except KeyboardInterrupt:
+                logging.info("Server stopped by user.")
+    else:
+        print("[VPN-SERVER] unable to connected to the main server")
+    

@@ -6,19 +6,16 @@ import logging
 import sys
 from typing import Tuple, Dict
 
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
-logging.basicConfig(level=logging.CRITICAL, format='%(asctime)s - %(levelname)s - %(message)s')
-logging.disable(logging.CRITICAL) 
-
-SERVER_ADDR = ("79.177.161.218", 50505)
+# SERVER_ADDR = ("79.177.161.218", 50505)
 # ADDRESS = "10.9.0.2/24" # Client's internal IP
 ADDRESS = None
 NAME = "vpn-tun"
 
-
 CLIENT_AES_KEY: bytes = None
 CLIENT_ADAPTER = None
-CLIENT_SERVER_IP_ADDR = SERVER_ADDR[0]
+# CLIENT_SERVER_IP_ADDR = SERVER_ADDR[0]
 CLIENT_SERVER_PUBLIC_KEY = None
 
 
@@ -126,6 +123,10 @@ class ClientVPNDatagramProtocol(asyncio.DatagramProtocol):
         ADDRESS = args.decode()
         logging.info("Private ip set to %s", ADDRESS)
         CLIENT_ADAPTER = await create_adapter(ADDRESS, NAME)
+        
+        # --- FIX: Give the OS 1 second to bring the interface UP ---
+        await asyncio.sleep(1)
+        
         setup_route_table(NAME, CLIENT_SERVER_IP_ADDR)
         self.transport.sendto(b"GETK", SERVER_ADDR)
 
@@ -149,7 +150,6 @@ class ClientVPNDatagramProtocol(asyncio.DatagramProtocol):
         except Exception as e:
             logging.error("Handshake error during key exchange: %s", e)
     
-
 
 async def tun_reader_loop(adapter, transport):
     """Reads packets from the TUN adapter and sends them encrypted to the server."""
@@ -192,6 +192,15 @@ async def main():
 
 if __name__ == "__main__":
     try:
+        if len(sys.argv) != 3:
+            print("Usage: python vpn_client.py <IP> <PORT>")
+            sys.exit(1)
+            
+        target_ip = sys.argv[1]
+        target_port = int(sys.argv[2])
+        SERVER_ADDR = (target_ip, target_port)
+        CLIENT_SERVER_IP_ADDR = SERVER_ADDR[0]
+        print(f"VPN Client started. Target: {target_ip}:{target_port}")
         asyncio.run(main())
     except KeyboardInterrupt:
         pass
