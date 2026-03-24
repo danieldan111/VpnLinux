@@ -131,8 +131,10 @@ class VPNDatagramProtocol(asyncio.DatagramProtocol):
 
     
     def handle_disconnection(self, args,addr):
-        logging.info("Client from %s with private ip of %s disconnected", addr, client_ip)
+        # FIX: Get the client_ip from the map BEFORE logging it!
         client_ip = addr_to_ip_map[addr]
+        logging.info("Client from %s with private ip of %s disconnected", addr, client_ip)
+        
         ip_to_addr_map.pop(client_ip)
         aes_keys.pop(addr)
         IP_POOL.append(client_ip)
@@ -216,7 +218,9 @@ def connect_to_server(addr):
         secure = SecureSocket(sock)
         secure.client_handshake()
         
-        payload = {"cmd": "SLGN", "server_name": SERVER_NAME}
+        # --- ADDED: The port is now sent to the main server ---
+        payload = {"cmd": "SLGN", "server_name": SERVER_NAME, "port": SERVER_PORT}
+        
         secure.send_json(payload)
         cmd = secure.recv_json().get("cmd")
         print(cmd)
